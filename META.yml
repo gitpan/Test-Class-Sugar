@@ -1,0 +1,14 @@
+--- 
+abstract: Helper syntax for writing Test::Class tests
+author: 
+  - Piers Cawley <pdcawley@bofh.org.uk>
+generated_by: Dist::Zilla::Plugin::MetaYaml version 1.004
+license: perl
+name: Test-Class-Sugar
+requires: 
+  B::Hooks::EndOfScope: 0
+  Devel::Declare: 0.003005
+  Modern::Perl: 0
+  Sub::Name: 0
+  Test::Class: 0.31
+version: 0.0100
