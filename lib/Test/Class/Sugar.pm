@@ -11,7 +11,7 @@ use Carp qw/croak/;
 
 use namespace::clean;
 
-our $VERSION = '0.0100';
+our $VERSION = '0.0200';
 
 my %PARSER_FOR = (
     testclass => '_parse_testclass',
@@ -29,16 +29,20 @@ use Sub::Exporter -setup => {
     installer => sub {
         my ($args, $to_export) = @_;
         my $pack = $args->{into};
+        unless (@$to_export) {
+            unshift @$to_export, 'testclass', \&testclass;
+        }
         foreach my $name (@$to_export) {
             if (my $parser = __PACKAGE__->can($PARSER_FOR{$name}//'-NOTHING-')) {
                 Devel::Declare->setup_for(
                     $pack,
-                    { $name => { const => sub { $parser->($pack, @_) } } },
+                    { $name => { const => sub { $parser->($pack, $args->{col}{defaults}, @_) } } },
                 );
             }
         }
         Sub::Exporter::default_installer(@_);
-    }
+    },
+    collectors => [qw/defaults/],
 };
 
 sub _test_generator {
@@ -51,7 +55,12 @@ sub _test_generator {
 }
 
 sub _testclass_generator {
-    my($ctx, $classname, $options) = @_;
+    my($ctx, $classname, $defaults, $options) = @_;
+
+    foreach my $key (keys %$defaults) {
+        $options->{$key} //= $defaults->{$key};
+    }
+    
     my $ret = Test::Class::Sugar::CodeGenerator->new(
         context   => $ctx,
         options   => $options,
@@ -63,6 +72,7 @@ sub _testclass_generator {
 
 sub _parse_inner_keyword {
     my $pack = shift;
+    my $defaults = shift;
 
     local $Carp::Internal{'Devel::Declare'} = 1;
 
@@ -80,36 +90,9 @@ sub _parse_inner_keyword {
     return;
 }
 
-sub _testclass_preamble {
-    my($ctx, $classname, $options) = @_;
-    my $preamble = '';
-
-    unless ($classname) {
-        $options->{class_under_test}
-        // croak "Must specify a testclass name or a class to exercise";
-        $classname = "Test::" . $options->{class_under_test} ;
-    }
-
-    $preamble .= "package ${classname}; use strict; use warnings;";
-    $preamble .= "use " . __PACKAGE__ . " qw/-inner/;";
-
-    my $baseclasses = $options->{base} || "Test::Class";
-    $options->{helpers} //= ['Test::Most'];
-
-    $preamble .= "use base qw/${baseclasses}/;";
-
-    foreach my $helper (@{$options->{helpers}}) {
-        $preamble .= "use ${helper};";
-    }
-
-    if (my $testedclass = $options->{class_under_test}) {
-        $preamble .= "require ${testedclass} unless \%${testedclass}::; sub subject { \"${testedclass}\" };"
-    }
-     $ctx->scope_injector_call() . $preamble;
-}
-
 sub _parse_testclass {
     my $pack = shift;
+    my $defaults = shift;
 
     local $Carp::Internal{'Devel::Declare'} = 1;
 
@@ -117,7 +100,7 @@ sub _parse_testclass {
 
     $ctx->skip_declarator;
     my $classname = $ctx->strip_testclass_name;
-    _testclass_generator($ctx, $classname, $ctx->strip_options)
+    _testclass_generator($ctx, $classname, $defaults, $ctx->strip_options)
         ->install_testclass;
 }
 
@@ -175,7 +158,7 @@ you. So, when you write
         ...
     }
 
-What Perl sees, after Test::Class::Sugar has done it's work is, roughly:
+What Perl sees, after Test::Class::Sugar has done its work, is roughly:
 
     {
         package Test::Person;
@@ -189,12 +172,12 @@ What Perl sees, after Test::Class::Sugar has done it's work is, roughly:
     }
 
 Some of the assumptions we made are overrideable, others aren't. Yet. Most of
-them will be though.
+them will be though. See L</Changing Assumptions> for details
 
 =head2 Why you shouldn't use Test::Class::Sugar
 
-Test::Class::Sugar is very new, pretty untested and is indadvertently hostile
-to you if you confuse it's parser. Don't use it if you want to live.
+Test::Class::Sugar is very new, pretty untested and is inadvertently hostile
+to you if you confuse its parser. Don't use it if you want to live.
 
 =head2 Why you should use Test::Class::Sugar
 
@@ -232,7 +215,7 @@ they do, and what they expect.
     testclass NAME?
       ( exercises CLASS
       | extends CLASS (, CLASS)*
-      | +?uses HELPER (, HELPER)*
+      | uses HELPER (, HELPER)*
       )*
 
 Where B<NAME> is is an optional test class name - the sort of thing you're
@@ -259,7 +242,7 @@ inheritance. Friends don't let friends do multiple inheritance, but
 Test::Class::Sugar's not a friend, it's a robot servant which will provide you
 with more than enough rope.
 
-=item +?uses HELPER (, HELPER)*
+=item uses HELPER (, HELPER)*
 
 Ah, the glory that is the C<uses> clause. If you don't provide a uses clause,
 Test::Class::Sugar will assume that you want to use L<Test::Most> as your
@@ -272,14 +255,6 @@ Hang on, C<-More>, what's that about? It's a simple shortcut. Instead of
 making you write C<uses Test::This, Test::That, Test::TheOther>, you can write
 C<uses -This, -That, -TheOther> and we'll expand the C<-> into C<Test::> and
 do the right thing.
-
-If, like me, you like Test::Most, but you want to use some other helper
-modules, then you'd do:
-
-    testclass AnotherExample +uses -MockObject, Moose {...}
-
-C<+uses> extends the list of helper classes, so as well as autousing
-Test::Most, you'll get L<Test::MockObject> and L<Moose>.
 
 Note that, if you need to do anything special in the way of import arguments,
 you should do the C<use> yourself. We're all about the 80:20 rule here.
@@ -303,9 +278,17 @@ Gets translated to:
     sub test_with_no_plan : Test(no_plan) {...}
     sub a_complicated_description_with_symbols_in_it : Test {...}
 
-See L<Test::Class/Test) for details of C<PLAN>'s semantics.
+See L<Test::Class/Test> for details of C<PLAN>'s semantics.
 
-=item B<startup>, B<setup>, B<teardown>, C<shutdown>
+=head2 Lifecycle Methods
+
+=item B<startup>
+
+=item B<setup>
+
+=item B<teardown>
+
+=item B<shutdown>
 
 These lifecycle helpers work in pretty much the same way as L</test>, but with
 the added wrinkle that, if you don't supply a name, they generate method names
@@ -323,7 +306,60 @@ is equivalent to writing:
     }
 
 Other than that, the lifecycle helpers behave pretty much as described in
-L<Test::Class|Test::Class/Test>. 
+L<Test::Class|Test::Class/Test>. In particular, you can still give them names, so
+
+    testclass {
+        setup with a name {...}
+    }
+
+works just fine.
+
+=back
+
+=head2 Changing Assumptions
+
+There are several aspects of Test::Class::Sugar's policy that you may disagree with. If you do, you can adjust them by passing a 'defaults' hash at use time. For example:
+
+    use Test::Class::Sugar defaults => { prefix => TestSuite };
+
+Here's a list of the possible default settings and what they affect.
+
+=over
+
+=item prefix
+
+Changes the prefix used for autogenerating test class names from C<Test::> to whatever you specify, so:
+
+    use Test::Class::Sugar defaults => { prefix => TestSuite };
+
+    testclass exercises Something {
+        ...
+    }
+
+will build a test class called C<TestSuite::Something>
+
+=item test_instance
+
+B<COMING SOON>
+
+Prefer C<$self> to C<$test> in your test methods? Then the C<test_instance> default is your friend. Just do
+
+    use Test::Class::Sugar defaults => { test_instance => '$self' }
+
+and all manner of things shall be well.
+
+
+
+=item uses
+
+B<< COMING SOON, BUT PROBABLY LATER THAN C<test_instance> >>
+
+Bored of adding the same old C<uses> clause to your every testclass? Fix it at use time like so:
+
+    use Test::Class::Sugar
+        defaults => {
+            uses => [qw/Test::More Moose/]
+        };
 
 =back
 

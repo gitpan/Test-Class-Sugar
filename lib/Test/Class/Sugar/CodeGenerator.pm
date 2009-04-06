@@ -5,6 +5,7 @@ class Test::Class::Sugar::CodeGenerator {
     use Sub::Name;
     use Carp qw/croak/;
     use B::Hooks::EndOfScope;
+    our $VERSION = '0.0200';
 
     has name    => (is => 'rw', isa => 'Str');
     has plan    => (is => 'rw');
@@ -22,9 +23,15 @@ class Test::Class::Sugar::CodeGenerator {
         lazy_build => 1,
     );
 
+    method _classname_prefix {
+        my $prefix = $self->options->{prefix} || "Test";
+        $prefix =~ s/(?:::)?$/::/;
+        $prefix;
+    }
+
     method _build_classname {
         if ($self->options->{class_under_test}) {
-            "Test::" . $self->options->{class_under_test};
+            $self->_classname_prefix . $self->options->{class_under_test};
         }
         else {
             $self->context->get_curstash_name

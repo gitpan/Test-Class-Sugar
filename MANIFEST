@@ -15,3 +15,5 @@ MANIFEST
 META.yml
 README.textile
 t/initial.t
+t/policy.t
+TODO.pod

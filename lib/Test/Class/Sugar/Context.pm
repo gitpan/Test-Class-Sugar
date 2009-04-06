@@ -1,4 +1,5 @@
 package Test::Class::Sugar::Context;
+our $VERSION = '0.0200';
 use Modern::Perl;
 use base qw/Devel::Declare::Context::Simple/;
 
@@ -97,7 +98,7 @@ sub strip_testclass_name {
     my $self = shift;
     $self->skipspace;
 
-    ! $self->looking_at(qr/^(?:\+?uses|ex(?:tends|ercises))/, 9)
+    ! $self->looking_at(qr/^(?:uses|ex(?:tends|ercises))/, 9)
     && $self->strip_name;
 }
 
@@ -133,16 +134,9 @@ sub strip_class_under_test {
 
 sub strip_helper_classes {
     my($self, $opts) = @_;
-    my $keyword = 'uses';
-    if ($self->looking_at('+')) {
-        $keyword = "+".$keyword;
-    }
-    return unless $self->strip_string($keyword);
+    return unless $self->strip_string('uses');
 
-    $opts->{helpers} //=
-      $keyword eq '+helper'
-        ? [qw/Test::Most/]
-        : [];
+    $opts->{helpers} //= [];
 
     while (1) {
         $self->skipspace;
