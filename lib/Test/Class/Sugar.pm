@@ -9,7 +9,7 @@ use Carp qw/croak/;
 
 use namespace::clean;
 
-our $VERSION = '0.0300';
+our $VERSION = '0.0400';
 
 my %PARSER_FOR = (
     testclass => '_parse_testclass',
@@ -31,7 +31,8 @@ use Sub::Exporter -setup => {
             unshift @$to_export, 'testclass', \&testclass;
         }
         foreach my $name (@$to_export) {
-            if (my $parser = __PACKAGE__->can($PARSER_FOR{$name}//'-NOTHING-')) {
+            my $parser_called = defined $PARSER_FOR{$name} ? $PARSER_FOR{$name} : '-NOTHING-';
+            if (my $parser = __PACKAGE__->can($parser_called)) {
                 Devel::Declare->setup_for(
                     $pack,
                     { $name => { const => sub { $parser->($pack, $args->{col}{defaults}, @_) } } },
@@ -56,7 +57,7 @@ sub _testclass_generator {
     my($ctx, $classname, $defaults, $options) = @_;
 
     foreach my $key (keys %$defaults) {
-        $options->{$key} //= $defaults->{$key};
+        defined $options->{$key} ? () : ($options->{$key} = $defaults->{$key});
     }
 
     my $ret = Test::Class::Sugar::CodeGenerator->new(
@@ -431,6 +432,17 @@ programmer.
 =head1 AUTHOR
 
 Piers Cawley C<< <pdcawley@bofh.org.uk> >>
+
+=head1 ACKNOWLEDGEMENTS
+
+Thanks to Adrian Howard for the original Test::Class, and to Adam Kennedy for
+taking on the maintenance of it.
+
+Thanks to my contributors:
+
+Hans Dieter Pearcey for documentation fixes and Joel Bernstein for doing the
+boring work of making this all work with Perl 5.8 (which means I can start
+using this at work!)
 
 =head1 LICENCE AND COPYRIGHT
 

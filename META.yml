@@ -26,8 +26,8 @@ requires:
   MooseX::Declare: 0
   Sub::Name: 0
   Test::Class: 0.33
-  perl: 5.10.0
+  perl: 5.8.8
 resources:
   license: http://dev.perl.org/licenses/
   repository: git://github.com/pdcawley/test-class-sugar.git
-version: 0.0300
+version: 0.0400
